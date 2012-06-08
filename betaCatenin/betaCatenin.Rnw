@@ -1,0 +1,26 @@
+library(mGenomics)
+library(synapseClient)
+synapseLogin('brig.mecham@sagebase.org','letmein')
+
+ent <- loadEntity('syn138509')
+fits <- runWorkflow(ent$cacheDir, workflow="snm")
+
+
+# Get the data
+dat <- exprs(fits$hgu133plus2[[1]])
+# Perform a differential expression test.
+treatment <- ifelse(grepl('E2F3', list.files(ent$cacheDir)), "GFP", "E2F3")
+X <- model.matrix(~ factor(treatment))
+sig <- calcSig(dat, X)
+# Take an SVD of the data.  Look at eigenweights and first couple of eigengenes
+u.full <- fs(dat)
+
+png(file='pvalues.png')
+hist(sig$pval, xlab="P values", ylab="Beta-Catenin Effect on Gene Expression Variation!")
+dev.off()
+
+barplot(u.full$d, ylab="Prop Variance Explained by Each Eigengene")
+plot(u.full$v[,1], xlab="Samples",ylab="Eigengene 1")
+plot(u.full$v[,2], xlab="Samples",ylab="Eigengene 2")
+
+a <- paste("./add.attachments.py METAGENOMICS \"Beta-Catenin\" \"text/plain\" ", 'pvalues.png'); system(a)

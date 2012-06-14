@@ -6,11 +6,51 @@ synapseLogin('brig.mecham@sagebase.org','letmein')
 ent <- loadEntity('syn138511')
 fits <- runWorkflow(ent$cacheDir, workflow="snm")
 
+newEnt <- Data(list(name="ectopicEGFR", 
+				parentId = "syn275939", 
+				platform=names(fits),						
+				tissueType="breast",
+				numSamples=ncol(exprs(fits[[1]][[1]])),
+				species="Homo sapiens"))
+annotValue(newEnt,'processingAlgorithm') <- 'snmUnsupervised'
+annotValue(newEnt,'cellLine') <- 'MCF'
+annotValue(newEnt,'perturbation') <- 'EGFR'
+newEnt <- addObject(newEnt, as.list(fits[[1]]), unlist=TRUE)
+newEnt <- createEntity(newEnt)
+newEnt <- storeEntity(newEnt)
+
+ent <- loadEntity("syn317799")
+
 # Get the data
-dat <- exprs(fits[[1]][[1]])
+dat <- exprs(ent$objects$eset)
 # Perform a differential expression test.
-treatment <- ifelse(grepl('E2F3', list.files(ent$cacheDir)), "GFP", "E2F3")
-X <- model.matrix(~ factor(treatment))
+tmp <- ent$objects$eset@protocolData@data$ScanDate
+dates <- sapply(strsplit(tmp," "), function(x){ x[1]})
+times <- sapply(strsplit(tmp," "), function(x){ x[2]})
+perturbation <- ifelse(grepl('GFP', colnames(dat)), "GFP","EGFR")
+obj <- data.frame(perturbation=perturbation,
+		scanDates=dates,
+		scanTimes=times)
+rownames(obj) <- colnames(dat)
+write.table(obj,file="ectopicEGFR_metadata.txt",sep="\t",quote=FALSE)
+
+mdEnt <- Data(list(name="ectopicEGFR_metadata", 
+				parentId = propertyValue(newEnt,'parentId'), 
+				platform=propertyValue(newEnt, 'platform'),
+				tissueType=propertyValue(newEnt, 'tissueType'),
+				disease=propertyValue(newEnt, 'disease'),
+				numSamples=propertyValue(newEnt, 'numSamples'),
+				species=propertyValue(newEnt, 'species')))
+annotations(mdEnt) <- annotations(newEnt)
+addObject(mdEnt, obj, "ectopicEGFR_metadata")
+addFile(mdEnt, "ectopicEGFR_metadata.txt")
+mdEnt <- createEntity(mdEnt)
+mdEnt <- storeEntity(mdEnt)
+
+mdEnt <- loadEntity('syn317801')
+table(mdEnt$objects$ectopicEGFR_metadata$perturbation, mdEnt$objects$ectopicEGFR_metadata$scanDates)
+
+X <- model.matrix(~ factor(perturbation))
 sig <- calcSig(dat, X)
 # Take an SVD of the data.  Look at eigenweights and first couple of eigengenes
 u.full <- fs(dat)

@@ -4,14 +4,52 @@ library(snm)
 synapseLogin('brig.mecham@sagebase.org','letmein')
 
 ent <- loadEntity('syn138518')
-fits <- runWorkflow(ent$cacheDir, workflow="snm")
-save(fits,file="unsupervisedFits.Rda")
+#fits <- runWorkflow(ent$cacheDir, workflow="snm")
+#save(fits,file="unsupervisedFits.Rda")
 
-# Get the data
-dat <- exprs(fits$hthgu133a[[1]])
+newEnt <- Data(list(name="ectopicMYC", 
+				parentId = "syn275939", 
+				platform=names(fits),						
+				tissueType="breast",
+				numSamples=ncol(exprs(fits[[1]][[1]])),
+				species="Homo sapiens"))
+annotValue(newEnt,'processingAlgorithm') <- 'snmUnsupervised'
+annotValue(newEnt,'cellLine') <- 'MCF'
+annotValue(newEnt,'perturbation') <- 'MYC'
+newEnt <- addObject(newEnt, as.list(fits[[1]]), unlist=TRUE)
+newEnt <- createEntity(newEnt)
+newEnt <- storeEntity(newEnt)
+
+ent <- loadEntity("syn319533")
+dat <- exprs(ent$objects$eset)
+
 # Perform a differential expression test.
-treatment <- ifelse(grepl('M', list.files(ent$cacheDir)), "Myc", "GFP")
-X <- model.matrix(~ factor(treatment))
+tmp <- ent$objects$eset@protocolData@data$ScanDate
+dates <- sapply(strsplit(tmp," "), function(x){ x[1]})
+times <- sapply(strsplit(tmp," "), function(x){ x[2]})
+perturbation <- ifelse(grepl('M', colnames(dat)), "MYC","GFP")
+obj <- data.frame(perturbation=perturbation,
+		scanDates=dates,
+		scanTimes=times)
+rownames(obj) <- colnames(dat)
+write.table(obj,file="ectopicMYC_metadata.txt",sep="\t",quote=FALSE)
+
+mdEnt <- Data(list(name="ectopicMYC_metadata", 
+				parentId = propertyValue(newEnt,'parentId'), 
+				platform=propertyValue(newEnt, 'platform'),
+				tissueType=propertyValue(newEnt, 'tissueType'),
+				disease=propertyValue(newEnt, 'disease'),
+				numSamples=propertyValue(newEnt, 'numSamples'),
+				species=propertyValue(newEnt, 'species')))
+annotations(mdEnt) <- annotations(newEnt)
+addObject(mdEnt, obj, "ectopicMYC_metadata")
+addFile(mdEnt, "ectopicMYC_metadata.txt")
+mdEnt <- createEntity(mdEnt)
+mdEnt <- storeEntity(mdEnt)
+
+mdEnt <- loadEntity('syn319619')
+table(mdEnt$objects$ectopicMYC_metadata$perturbation, mdEnt$objects$ectopicMYC_metadata$scanDates)
+X <- model.matrix(~ factor(perturbation))
 sig <- calcSig(dat, X)
 
 myc <- names(which(sig$cfs[,2] > 0.5))
@@ -21,7 +59,7 @@ hsym[1:5]
 load("~/Desktop/studies.Rda")
 load("~/Documents/Randoms/gic_explore.Rda")
 myc.sig <- calc.signature.stats("",gpl570.gic, sort(as.character(hsym[myc])))
-studies[names(which(myc.sig[2,] > 0.5)),1]
+studies[names(which(myc.sig[2,] > 0.5)),1:2]
 
 qry <- synapseQuery('select id, name from entity where entity.parentId == "syn301181" and entity.name=="GSE10070_processed"')
 newEnt <- loadEntity(qry$entity.id)

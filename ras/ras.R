@@ -102,7 +102,7 @@ newEnt <- addObject(newEnt, statistics)
 # Create new entity in synapse
 newEnt <- createEntity(newEnt)
 newEnt <- storeEntity(newEnt)
-
+	
 
 
 

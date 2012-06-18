@@ -124,13 +124,18 @@ pi3k.sig <- calc.signature.stats("",gpl570.gic, sign)
 studies[names(which(pi3k.sig[2,] > 0.5)),1:2]
 
 png(file="ks.png")
-plot(ks[2,], xlab="Studies", ylab="Signature Enrichment")
+plot(pi3k.sig[2,], xlab="Studies", ylab="Signature Enrichment")
 dev.off()
 a <- paste("./add.attachments.py METAGENOMICS \"SRC\" \"text/plain\" ", 'ks.png'); system(a)
 
+rownames(dat) <- hsym[rownames(dat)]
+th <- intersect(rownames(gpl570.gic), rownames(dat))
+dat2 <- dat[th,]
+gpl2 <- gpl570.gic[th,]
 
-
-
+sig <- calcSig(dat2, X)
+Z <- model.matrix(~ pi3k.sig[2,])
+sig2 <- calcSig(gpl2, Z)
 
 library(affy)
 abatch <- ReadAffy(filenames=list.files(ent$cacheDir,full.names=TRUE))

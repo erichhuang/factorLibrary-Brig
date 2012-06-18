@@ -132,12 +132,21 @@ a <- paste("./add.attachments.py METAGENOMICS \"SRC\" \"text/plain\" ", 'prePost
 
 load("~/Documents/Randoms/gic_explore.Rda")
 sign <- hsym[names(sort(-sig$cfs[,2]))[1:300]]
-ks <- calc.signature.stats("",gpl570.gic, sign)
+src.sig <- calc.signature.stats("",gpl570.gic, sign)
 
 png(file="ks.png")
-plot(ks[2,], xlab="Studies", ylab="Signature Enrichment")
+plot(src.sig[2,], xlab="Studies", ylab="Signature Enrichment")
 dev.off()
 a <- paste("./add.attachments.py METAGENOMICS \"SRC\" \"text/plain\" ", 'ks.png'); system(a)
+
+rownames(dat) <- hsym[rownames(dat)]
+th <- intersect(rownames(gpl570.gic), rownames(dat))
+dat2 <- dat[th,]
+gpl2 <- gpl570.gic[th,]
+
+sig <- calcSig(dat2, X)
+Z <- model.matrix(~ src.sig[2,])
+sig2 <- calcSig(gpl2, Z)
 
 
 ent <- loadEntity('syn138525')

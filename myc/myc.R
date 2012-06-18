@@ -61,6 +61,19 @@ load("~/Documents/Randoms/gic_explore.Rda")
 myc.sig <- calc.signature.stats("",gpl570.gic, sort(as.character(hsym[myc])))
 studies[names(which(myc.sig[2,] > 0.5)),1:2]
 
+rownames(dat) <- hsym[rownames(dat)]
+th <- intersect(rownames(gpl570.gic), rownames(dat))
+dat2 <- dat[th,]
+gpl2 <- gpl570.gic[th,]
+
+sig <- calcSig(dat2, X)
+Z <- model.matrix(~ myc.sig[2,])
+sig2 <- calcSig(gpl2, Z)
+
+
+
+
+
 qry <- synapseQuery('select id, name from entity where entity.parentId == "syn301181" and entity.name=="GSE10070_processed"')
 newEnt <- loadEntity(qry$entity.id)
 gics  <- newEnt$objects$hgu133plus2$statistics$singular.values[,1]

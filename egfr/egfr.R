@@ -52,6 +52,36 @@ table(mdEnt$objects$ectopicEGFR_metadata$perturbation, mdEnt$objects$ectopicEGFR
 
 X <- model.matrix(~ factor(perturbation))
 sig <- calcSig(dat, X)
+
+egfr <- names(which(sig$cfs[,2] > 0.5))
+load("~/Desktop/studies.Rda")
+load("~/Documents/Randoms/gic_explore.Rda")
+library(mg.hgu133plus2.db); 
+hsym <- as.character(mg.hgu133plus2SYMBOL)
+egfr.sig <- calc.signature.stats("",gpl570.gic, sort(as.character(hsym[egfr])))
+studies[names(which(egfr.sig[2,] > 0.5)),1:2]
+
+rownames(dat) <- hsym[rownames(dat)]
+th <- intersect(rownames(gpl570.gic), rownames(dat))
+dat2 <- dat[th,]
+gpl2 <- gpl570.gic[th,]
+
+sig <- calcSig(dat2, X)
+Z <- model.matrix(~ egfr.sig[2,])
+sig2 <- calcSig(gpl2, Z)
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Take an SVD of the data.  Look at eigenweights and first couple of eigengenes
 u.full <- fs(dat)
 

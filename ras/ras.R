@@ -6,12 +6,72 @@ synapseLogin('brig.mecham@sagebase.org','letmein')
 ent <- loadEntity('syn138522')
 fits <- runWorkflow(ent$cacheDir, workflow="snm")
 
+
+newEnt <- Data(list(name="ectopicRAS", 
+				parentId = "syn275939", 
+				platform=names(fits),						
+				tissueType="breast",
+				numSamples=ncol(exprs(fits[[1]][[1]])),
+				species="Homo sapiens"))
+annotValue(newEnt,'processingAlgorithm') <- 'snmUnsupervised'
+annotValue(newEnt,'cellLine') <- 'MCF'
+annotValue(newEnt,'perturbation') <- 'RAS'
+newEnt <- addObject(newEnt, as.list(fits[[1]]), unlist=TRUE)
+newEnt <- createEntity(newEnt)
+newEnt <- storeEntity(newEnt)
+
+ent <- loadEntity("syn324660")
+
 # Get the data
-dat <- exprs(fits$hthgu133a[[1]])
+dat <- exprs(ent$objects$eset)
 # Perform a differential expression test.
-treatment <- ifelse(grepl('M', list.files(ent$cacheDir)), "Myc", "GFP")
-X <- model.matrix(~ factor(treatment))
+tmp <- ent$objects$eset@protocolData@data$ScanDate
+dates <- sapply(strsplit(tmp,"T"), function(x){ x[1]})
+times <- sapply(strsplit(tmp,"T"), function(x){ x[2]})
+times <- gsub("Z","",times)
+perturbation <- ifelse(grepl('GFP', colnames(dat)), "GFP","RAS")
+obj <- data.frame(perturbation=perturbation,
+		scanDates=dates,
+		scanTimes=times)
+rownames(obj) <- colnames(dat)
+write.table(obj,file="ectopicRAS_metadata.txt",sep="\t",quote=FALSE)
+
+mdEnt <- Data(list(name="ectopicRAS_metadata", 
+				parentId = propertyValue(newEnt,'parentId'), 
+				platform=propertyValue(newEnt, 'platform'),
+				tissueType=propertyValue(newEnt, 'tissueType'),
+				disease=propertyValue(newEnt, 'disease'),
+				numSamples=propertyValue(newEnt, 'numSamples'),
+				species=propertyValue(newEnt, 'species')))
+annotations(mdEnt) <- annotations(newEnt)
+addObject(mdEnt, obj, "ectopicRAS_metadata")
+addFile(mdEnt, "ectopicRAS_metadata.txt")
+mdEnt <- createEntity(mdEnt)
+mdEnt <- storeEntity(mdEnt)
+
+mdEnt <- loadEntity('syn324706')
+table(mdEnt$objects$ectopicRAS_metadata$perturbation, mdEnt$objects$ectopicRAS_metadata$scanDates)
+
+X <- model.matrix(~ factor(perturbation))
 sig <- calcSig(dat, X)
+
+ras <- names(which(sig$cfs[,2] > 0.4))
+load("~/Desktop/studies.Rda")
+load("~/Documents/Randoms/gic_explore.Rda")
+library(mg.hgu133plus2.db); 
+hsym <- as.character(mg.hgu133plus2SYMBOL)
+ras.sig <- calc.signature.stats("",gpl570.gic, sort(as.character(hsym[ras])))
+studies[names(which(ras.sig[2,] > 0.5)),1:2]
+
+rownames(dat) <- hsym[rownames(dat)]
+th <- intersect(rownames(gpl570.gic), rownames(dat))
+dat2 <- dat[th,]
+gpl2 <- gpl570.gic[th,]
+
+sig <- calcSig(dat2, X)
+Z <- model.matrix(~ ras.sig[2,])
+sig2 <- calcSig(gpl2, Z)
+
 # Take an SVD of the data.  Look at eigenweights and first couple of eigengenes
 u.full <- fs(dat)
 
@@ -31,10 +91,10 @@ png(file="eg2.png")
 plot(u.full$v[,2], xlab="Samples",ylab="Eigengene 2")
 dev.off()
 
-a <- paste("./add.attachments.py METAGENOMICS \"MYC\" \"text/plain\" ", 'pvalues.png'); system(a)
-a <- paste("./add.attachments.py METAGENOMICS \"MYC\" \"text/plain\" ", 'u_unsup_d.png'); system(a)
-a <- paste("./add.attachments.py METAGENOMICS \"MYC\" \"text/plain\" ", 'eg1.png'); system(a)
-a <- paste("./add.attachments.py METAGENOMICS \"MYC\" \"text/plain\" ", 'eg2.png'); system(a)
+a <- paste("./add.attachments.py METAGENOMICS \"RAS\" \"text/plain\" ", 'pvalues.png'); system(a)
+a <- paste("./add.attachments.py METAGENOMICS \"RAS\" \"text/plain\" ", 'u_unsup_d.png'); system(a)
+a <- paste("./add.attachments.py METAGENOMICS \"RAS\" \"text/plain\" ", 'eg1.png'); system(a)
+a <- paste("./add.attachments.py METAGENOMICS \"RAS\" \"text/plain\" ", 'eg2.png'); system(a)
 
 # Explore workflow output. Calculate the total sums of squares of the data.
 dat.m <- rowMeans(dat)
@@ -54,7 +114,7 @@ png(file="pVE_rEGs.png")
 barplot(round(rSSQ_dat * u$d,3) / tSSQ_dat, ylab="Prop tSSQ Explained by Each Eigengene")
 dev.off()
 
-a <- paste("./add.attachments.py METAGENOMICS \"MYC\" \"text/plain\" ", 'pVE_rEGs.png'); system(a)
+a <- paste("./add.attachments.py METAGENOMICS \"RAS\" \"text/plain\" ", 'pVE_rEGs.png'); system(a)
 
 sva.fit <- sva(dat, bio.var=X, n.sv=1, num.iter=30, diagnose=FALSE)
 # Now, we'll take a look at the estimated basis vectors
@@ -104,6 +164,53 @@ newEnt <- createEntity(newEnt)
 newEnt <- storeEntity(newEnt)
 	
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(affy)
+abatch <- ReadAffy(filenames=list.files(ent$cacheDir,full.names=TRUE))
+int.var <- bio.var <- adj.var <- gene2row <- NULL
+rm.adj <- TRUE
+int <- exprs(abatch)
+# Gets the gene2row object that helps us define probe sets.
+gene2row.cdf <- getGene2Row(gene2row, annotation(abatch))
+# Loads the pm data and calls snm
+pms <- int[unlist(gene2row.cdf), ]
+pms[pms <= 1] <- 1
+data <- log2(pms)
+if(is.null(int.var)) {
+	int.var <- data.frame(array = factor(1:ncol(data)))
+}
+# Calls snm
+if(verbose) {cat("Normalizing Data\n")}
+sendLogMessage("Normalizing Data",logFile)
+snm.fit <- snm(data, bio.var, adj.var, int.var=int.var, diagnose=FALSE, rm.adj=rm.adj,verbose=FALSE)
+colnames(snm.fit$norm.dat) <- sampleNames(abatch)
+
+
+int.var <- data.frame(scanDate=factor(ifelse(dates=='03/11/04',1,2)))
+snm.fit.2 <- snm(data, bio.var, adj.var, int.var=int.var, diagnose=FALSE, rm.adj=rm.adj,verbose=FALSE)
+
+gene2row.tmp <- split(1:nrow(pms), rep(names(gene2row.cdf), sapply(gene2row.cdf,length)))
+
+# Calls EPSA
+if(verbose) {cat("Summarizing Data\n")}
+sendLogMessage("Summarizing Data",logFile)	
+fits <- fit.pset(snm.fit$norm.dat, gene2row.tmp)
 
 
 

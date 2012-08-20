@@ -1,6 +1,5 @@
 library(mGenomics)
 library(synapseClient)
-synapseLogin('brig.mecham@sagebase.org','letmein')
 
 ent <- loadEntity('syn138509')
 fits <- runWorkflow(ent$cacheDir, workflow="snm")
